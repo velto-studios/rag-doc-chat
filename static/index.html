@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>rag-doc-chat</title>
+<style>
+body{font-family:system-ui,sans-serif;background:#1f2327;color:#f6f2ea;max-width:760px;margin:40px auto;padding:0 20px}
+h1{font-size:1.4rem}
+h1 span{color:#2a9d92}
+textarea,input{width:100%;box-sizing:border-box;background:#171b1e;color:#f6f2ea;border:1px solid rgba(246,242,234,.15);border-radius:8px;padding:10px;font:inherit}
+button{background:#1f817e;color:#f6f2ea;border:none;border-radius:8px;padding:10px 20px;font-weight:600;cursor:pointer;margin-top:8px}
+button:hover{background:#2a9d92}
+#log{margin-top:24px;display:grid;gap:12px}
+.msg{background:rgba(246,242,234,.04);border:1px solid rgba(246,242,234,.1);border-radius:8px;padding:14px;white-space:pre-wrap;font-size:.9rem}
+.msg .who{color:#2a9d92;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;margin-bottom:6px}
+.cites{color:#c9c4b8;font-size:.78rem;margin-top:8px}
+.row{display:grid;gap:8px;margin-top:16px}
+.mode{color:#c9c4b8;font-size:.8rem}
+</style>
+</head>
+<body>
+<h1>rag-doc-chat <span>/ chat with your documents</span></h1>
+<p class="mode" id="mode">checking mode...</p>
+<div class="row">
+  <textarea id="doc" rows="4" placeholder="Paste a document here to ingest it (or use the /ingest API)..."></textarea>
+  <button onclick="ingest()">Ingest document</button>
+</div>
+<div class="row">
+  <input id="q" placeholder="Ask a question about the ingested documents..." onkeydown="if(event.key==='Enter')ask()">
+  <button onclick="ask()">Ask</button>
+</div>
+<div id="log"></div>
+<script>
+const log = document.getElementById('log');
+function add(who, text, cites){
+  const d = document.createElement('div');
+  d.className = 'msg';
+  d.innerHTML = '<div class="who">'+who+'</div>'+text.replace(/</g,'&lt;').replace(/\n/g,'<br>')+
+    (cites?'<div class="cites">sources: '+cites.map(c=>c.source+' (score '+c.score+')').join(' | ')+'</div>':'');
+  log.prepend(d);
+}
+fetch('/health').then(r=>r.json()).then(h=>{
+  document.getElementById('mode').textContent =
+    'mode: '+h.mode+' | chunks indexed: '+h.chunks;
+});
+async function ingest(){
+  const text = document.getElementById('doc').value;
+  if(!text.trim())return;
+  const r = await fetch('/ingest',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,source:'web-ui'})});
+  const j = await r.json();
+  add('system','Ingested '+j.chunks+' chunk(s) as '+j.doc_id);
+  document.getElementById('doc').value='';
+}
+async function ask(){
+  const q = document.getElementById('q').value;
+  if(!q.trim())return;
+  add('you',q);
+  document.getElementById('q').value='';
+  const r = await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:q})});
+  const j = await r.json();
+  add('assistant ('+j.mode+')',j.answer,j.citations);
+}
+</script>
+</body>
+</html>
